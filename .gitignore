@@ -7,3 +7,6 @@ __pycache__/
 
 # Ignore virtual environments
 venv/
+
+# Test Directory
+test_sample/
