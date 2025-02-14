@@ -2,6 +2,7 @@ import os
 import shutil
 import argparse
 import time
+import json
 from dotenv import load_dotenv
 import requests
 import fitz  # PyMuPDF for PDF processing
@@ -22,19 +23,15 @@ class TxtExtractor(ContentExtractor):
             return file.read()
 
 class PdfExtractor(ContentExtractor):
-    def extract(self, file_path, max_pages=5, max_chars=2000, max_chunk_size=1000):
-        text = ""
+    def extract(self, file_path, max_pages=10):
         chunks = []
         with fitz.open(file_path) as doc:
             for page_num, page in enumerate(doc):
-                if page_num >= max_pages:  # Limit pages to avoid too much text
+                if page_num >= max_pages:  # Limit to first max_pages pages
                     break
-                text += page.get_text()
-                if len(text) > max_chars:
-                    text = text[:max_chars]  # Truncate if too long
-                chunks.extend([text[i:i + max_chunk_size] for i in range(0, len(text), max_chunk_size)])
-                text = ""  # Reset text after adding to chunks
-        return chunks if len(chunks) > 1 else text
+                text = page.get_text()
+                chunks.append(text)  # Store each page as its own chunk
+        return chunks
 
 class DocxExtractor(ContentExtractor):
     def extract(self, file_path):
@@ -58,6 +55,8 @@ class FileOrganizer:
             "jpg": ImageExtractor(),
             "jpeg": ImageExtractor()
         }
+        self.rollback_log = os.path.join(self.base_dir, "rollback_log.json")
+        self.moved_files = []
     
     def load_api_key(self):
         """Loads DeepSeek API key from environment variables."""
@@ -86,7 +85,6 @@ class FileOrganizer:
             try:
                 response = requests.post(url, headers=headers, json=data, timeout=20)
                 response.raise_for_status()
-                print(response.json()["choices"][0]["message"]["content"].strip())
                 return response.json()["choices"][0]["message"]["content"].strip()
             except requests.exceptions.RequestException as e:
                 print(f"DeepSeek API request failed: {e}. Retrying ({attempt+1}/{retries})...")
@@ -94,11 +92,36 @@ class FileOrganizer:
         raise Exception("Failed after multiple retries due to API issues.")
     
     def move_file_to_category(self, file_path, category):
-        """Moves the file to the appropriate category directory."""
+        """Moves the file to the appropriate category directory and logs the move for rollback."""
         category_path = os.path.join(self.base_dir, category)
         os.makedirs(category_path, exist_ok=True)
-        shutil.move(file_path, os.path.join(category_path, os.path.basename(file_path)))
+        new_path = os.path.join(category_path, os.path.basename(file_path))
+        shutil.move(file_path, new_path)
         print(f"Moved {file_path} to {category}/")
+        self.moved_files.append({"original": file_path, "new": new_path})
+    
+    def save_rollback_log(self):
+        """Saves moved files to a log for rollback purposes."""
+        with open(self.rollback_log, "w") as log_file:
+            json.dump(self.moved_files, log_file, indent=4)
+    
+    def rollback_changes(self):
+        """Moves files back to their original locations based on the rollback log."""
+        if not os.path.exists(self.rollback_log):
+            print("No rollback log found.")
+            return
+        
+        with open(self.rollback_log, "r") as log_file:
+            moved_files = json.load(log_file)
+        
+        for entry in moved_files:
+            original_path = entry["original"]
+            new_path = entry["new"]
+            if os.path.exists(new_path):
+                shutil.move(new_path, original_path)
+                print(f"Rolled back {new_path} to {original_path}")
+        
+        os.remove(self.rollback_log)  # Remove log after rollback
     
     def organize_files(self):
         """Organizes all supported files in the directory."""
@@ -109,23 +132,23 @@ class FileOrganizer:
                 if ext in self.extractors:
                     print(f"Processing {file_name}...")
                     text_content = self.extractors[ext].extract(file_path)
-                    if isinstance(text_content, list):  # Handle chunked text
-                        categories = []
-                        for chunk in text_content:
-                            category = self.categorize_text_with_deepseek(file_name, chunk)
-                            categories.append(category)
-                        category = max(set(categories), key=categories.count)  # Choose most common category
-                    else:
-                        category = self.categorize_text_with_deepseek(file_name, text_content)
+                    category = self.categorize_text_with_deepseek(file_name, text_content)
                     self.move_file_to_category(file_path, category)
                     self.existing_dirs = self.get_existing_directories()
                 else:
                     print(f"Skipping unsupported file: {file_name}")
+        self.save_rollback_log()
         print("Organization complete!")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Organize files into categorized directories.")
     parser.add_argument("base_directory", type=str, help="Path to the directory containing files.")
+    parser.add_argument("--rollback", action="store_true", help="Rollback the last organization operation.")
     args = parser.parse_args()
+    
     organizer = FileOrganizer(args.base_directory)
-    organizer.organize_files()
+    
+    if args.rollback:
+        organizer.rollback_changes()
+    else:
+        organizer.organize_files()

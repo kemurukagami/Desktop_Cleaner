@@ -8,6 +8,7 @@ Desktop Cleaner is a Python project designed to organize files on your desktop i
 - Categorizes files based on their content using the DeepSeek API.
 - Moves files into appropriate directories based on their categories.
 - Supports chunked text processing for large documents.
+- Supports rollbacks
 
 ## Requirements
 
