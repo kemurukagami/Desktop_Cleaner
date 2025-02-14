@@ -56,9 +56,11 @@ python desk_organize.py C:/Users/Isaac/OneDrive/Desktop
 
 ## Project Structure
 
+```
 desktop_cleaner/
 │
 ├── desk_organize.py       # Main script for organizing files
 ├── requirements.txt       # List of required packages
 ├── .env                   # Environment file for storing API keys
 └── README.md              # Project documentation
+```
