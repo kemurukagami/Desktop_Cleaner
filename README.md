@@ -23,7 +23,7 @@ Desktop Cleaner is a Python project designed to organize files on your desktop i
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/yourusername/desktop_cleaner.git
+    git clone https://github.com/kemurukagami/Desktop_Cleaner.git
     cd desktop_cleaner
     ```
 
@@ -33,8 +33,8 @@ Desktop Cleaner is a Python project designed to organize files on your desktop i
     ```
 
 3. Set up the DeepSeek API key:
-    - Create a [.env](http://_vscodecontentref_/0) file in the project directory.
-    - Add your DeepSeek API key to the [.env](http://_vscodecontentref_/1) file:
+    - Create a .env file in the project directory.
+    - Add your DeepSeek API key to the .env file:
         ```
         DEEPSEEK_API_KEY=your_api_key_here
         ```
@@ -43,7 +43,7 @@ Desktop Cleaner is a Python project designed to organize files on your desktop i
 
 1. Run the script with the path to the directory containing the files you want to organize:
     ```sh
-    python [desk_organize.py](http://_vscodecontentref_/2) /path/to/your/desktop
+    python [desk_organize.py](./desk_organize.py) /path/to/your/desktop
     ```
 
 2. The script will process the files in the specified directory, categorize them using the DeepSeek API, and move them into appropriate directories.
@@ -52,6 +52,7 @@ Desktop Cleaner is a Python project designed to organize files on your desktop i
 
 ```sh
 python desk_organize.py C:/Users/Isaac/OneDrive/Desktop
+```
 
 ## Project Structure
 
