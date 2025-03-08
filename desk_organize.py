@@ -63,6 +63,10 @@ class FileOrganizer:
         }
         self.rollback_log = os.path.join(self.base_dir, "rollback_log.json")
         self.moved_files = []
+        # Load or create a tag database for smart tagging
+        self.tag_db_path = os.path.join(self.base_dir, "file_tags.json")
+        self.file_tags = self.load_tags()
+
 
     def load_api_key(self):
         """Loads DeepSeek API key from environment variables."""
@@ -72,16 +76,7 @@ class FileOrganizer:
             raise ValueError("API key not found. Set DEEPSEEK_API_KEY in a .env file or environment variable.")
 
     def load_files_to_organize(self):
-        """Loads a list of files that the user wants to organize from .files_to_organize (optional).
-        
-            Format of .files_to_organize:
-            Each line contains the exact filename (or relative path) to be organized.
-            Example:
-            report.pdf
-            notes.txt
-            images/photo.jpg
-            If empty or absent, all supported files will be organized.
-        """
+        """Loads a list of files that the user wants to organize from .files_to_organize (optional).\n\nFormat of .files_to_organize:\n    Each line contains the exact filename (or relative path) to be organized.\n    Example:\n        report.pdf\n        notes.txt\n        images/photo.jpg\n    If empty or absent, all supported files will be organized."""
         organize_file = os.path.join(self.base_dir, ".files_to_organize")
         if os.path.exists(organize_file):
             with open(organize_file, "r", encoding="utf-8") as f:
@@ -92,15 +87,7 @@ class FileOrganizer:
         return set()
 
     def load_excluded_dirs(self):
-        """Loads a list of subdirectories that should not be used as categories from .excluded_dirs (optional).
-        
-            Format of .excluded_dirs:
-            Each line contains the name of a directory to exclude from categorization.
-            Example:
-            old_projects
-            private_docs
-            These directories will not be suggested or used as valid categories.
-        """
+        """Loads a list of subdirectories that should not be used as categories from .excluded_dirs (optional).\n\nFormat of .excluded_dirs:\n    Each line contains the name of a directory to exclude from categorization.\n    Example:\n        old_projects\n        private_docs\n    These directories will not be suggested or used as valid categories."""
         excluded_file = os.path.join(self.base_dir, ".excluded_dirs")
         if os.path.exists(excluded_file):
             with open(excluded_file, "r", encoding="utf-8") as f:
@@ -118,7 +105,7 @@ class FileOrganizer:
             dirs[:] = [d for d in dirs if d not in self.excluded_dirs]
 
             rel_path = os.path.relpath(root, self.base_dir)
-            # If rel_path == '.', it's the base dir. We'll still consider that, or skip if you prefer.
+            # If rel_path == '.', it's the base dir. We'll still consider that, or skip.
             if rel_path == '.':
                 # The base_dir itself can be considered a valid category if not excluded
                 if os.path.basename(root) not in self.excluded_dirs:
@@ -152,7 +139,8 @@ class FileOrganizer:
         raise Exception("Failed after multiple retries due to API issues.")
 
     def move_file_to_category(self, file_path, category):
-        """Moves the file to the appropriate category directory and logs the move for rollback."""
+        """Moves the file to the appropriate category directory and logs the move for rollback.
+       Also adds a 'smart tag' for the chosen category."""
         # The category might be a subdirectory path, so ensure we join carefully
         category_path = os.path.join(self.base_dir, category)
         os.makedirs(category_path, exist_ok=True)
@@ -160,6 +148,9 @@ class FileOrganizer:
         shutil.move(file_path, new_path)
         print(f"Moved {file_path} to {category}/")
         self.moved_files.append({"original": file_path, "new": new_path})
+        # Add a smart tag to the file indicating its category
+        self.add_tag(new_path, category)
+
 
     def save_rollback_log(self):
         """Saves moved files to a log for rollback purposes."""
@@ -180,6 +171,51 @@ class FileOrganizer:
                 shutil.move(new_path, original_path)
                 print(f"Rolled back {new_path} to {original_path}")
         os.remove(self.rollback_log)
+
+    def load_tags(self):
+        """Loads a JSON file mapping file paths to a list of tags for smart tagging."""
+        if os.path.exists(self.tag_db_path):
+            with open(self.tag_db_path, "r", encoding="utf-8") as f:
+                try:
+                    return json.load(f)
+                except json.JSONDecodeError:
+                    return {}
+        return {}
+
+    def save_tags(self):
+        """Saves the file->tags mapping to a JSON file for persistent smart tagging."""
+        with open(self.tag_db_path, "w", encoding="utf-8") as f:
+            json.dump(self.file_tags, f, indent=4)
+
+    def add_tag(self, file_path, tag):
+        """Adds a tag to the specified file in the tag database."""
+        abs_path = os.path.abspath(file_path)
+        if abs_path not in self.file_tags:
+            self.file_tags[abs_path] = []
+        if tag not in self.file_tags[abs_path]:
+            self.file_tags[abs_path].append(tag)
+        self.save_tags()
+
+    def remove_tag(self, file_path, tag):
+        """Removes a tag from the specified file in the tag database (if present)."""
+        abs_path = os.path.abspath(file_path)
+        if abs_path in self.file_tags and tag in self.file_tags[abs_path]:
+            self.file_tags[abs_path].remove(tag)
+            self.save_tags()
+
+    def list_file_tags(self, file_path):
+        """Returns the list of tags associated with a given file."""
+        abs_path = os.path.abspath(file_path)
+        return self.file_tags.get(abs_path, [])
+
+    def search_by_tag(self, tag):
+        """Returns a list of files that have the specified tag."""
+        results = []
+        for fpath, tags in self.file_tags.items():
+            if tag in tags:
+                results.append(fpath)
+        return results
+
 
     def organize_files(self):
         """Organizes all supported files in the base directory, or only those listed in .files_to_organize if present.
