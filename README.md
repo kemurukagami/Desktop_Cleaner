@@ -56,7 +56,7 @@ A Python-based utility for **automatically categorizing files** in a directory u
 
 1. **Organize Files**:
    ```bash
-   python organize.py /path/to/base_directory
+   python desk_organize.py /path/to/base_directory
    ```
    - Extracts text from each file and queries the DeepSeek API for a suitable **category**.
    - Moves files into category-named folders.
@@ -65,7 +65,7 @@ A Python-based utility for **automatically categorizing files** in a directory u
 
 2. **Rollback**:
    ```bash
-   python organize.py /path/to/base_directory --rollback
+   python desk_organize.py /path/to/base_directory --rollback
    ```
    - Reads `rollback_log.json` and restores moved files to their original locations.
    - Removes `rollback_log.json` upon completion.

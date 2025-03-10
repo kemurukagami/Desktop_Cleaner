@@ -10,3 +10,5 @@ venv/
 
 # Test Directory
 test_sample/
+
+*.docx
